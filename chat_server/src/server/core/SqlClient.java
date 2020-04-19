@@ -2,7 +2,7 @@ package server.core;
 
 import java.sql.*;
 
-public class SqlClient {
+class SqlClient {
 
     private static Connection connection;
     private static Statement statement;
@@ -10,7 +10,7 @@ public class SqlClient {
     synchronized static void connect () {
         try {
             Class.forName("org.sqlite.JDBC");
-            connection = DriverManager.getConnection("jdbc:sqlite:chatDb.sqlite");
+            connection = DriverManager.getConnection("jdbc:sqlite:chat_server/chatDb.sqlite");
             statement = connection.createStatement();
         } catch (ClassNotFoundException | SQLException e) {
             throw new RuntimeException(e);
@@ -36,4 +36,5 @@ public class SqlClient {
         }
         return null;
     }
+
 }

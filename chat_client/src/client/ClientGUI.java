@@ -3,7 +3,6 @@ package client;
 import common.Library;
 import network.SocketThread;
 import network.SocketThreadListener;
-import server.core.ChatServer;
 
 import javax.swing.*;
 import java.awt.*;
@@ -14,11 +13,13 @@ import java.io.IOException;
 import java.net.Socket;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 
 public class ClientGUI extends JFrame implements ActionListener, Thread.UncaughtExceptionHandler, SocketThreadListener {
 
     private static final int WIDTH = 400;
     private static final int HEIGHT = 300;
+    private final String TITLE = "ChatClient";
 
     private final JTextArea log = new JTextArea();
     private final JPanel panelTop = new JPanel(new GridLayout(2,3));
@@ -32,7 +33,7 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
     private final JButton bnDisconnect = new JButton("Disconnect");
     private final JTextField tfMessage = new JTextField();
     private final JButton btnSend = new JButton("Send");
-    private JList<SocketThread> users = new JList<>();
+    private JList<String> users = new JList<>();
     private boolean shownIoErrors = false;
     private SocketThread socketThread;
     private final DateTimeFormatter DTF = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
@@ -46,13 +47,13 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
         });
     }
 
-    private ClientGUI(){
+    private ClientGUI() {
         Thread.setDefaultUncaughtExceptionHandler(this);
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setSize(WIDTH, HEIGHT);
         setResizable(false);
-        setTitle("ChatClient");
+        setTitle(TITLE);
         log.setEditable(false);
         log.setLineWrap(true);  //переход на новую строку в случае достижение конца textArea
         log.setWrapStyleWord(true); // перенос слов
@@ -79,17 +80,16 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
         tfMessage.addActionListener(this);
         login.addActionListener(this);
         bnDisconnect.addActionListener(this);
-        users.setListData(ChatServer.clients);
     }
 
     private void connect() {
-        Socket socket;
+        Socket socket = null;
         try {
             socket = new Socket(tfIPAddress.getText(), Integer.parseInt(tfPort.getText()));
-            socketThread = new SocketThread(this, "ClientSocketThread", socket);
         } catch (IOException e) {
-            showException(e);
+            writeToLog("Exception: " + e.getMessage());
         }
+        socketThread = new SocketThread(this, "ClientSocketThread", socket);
     }
 
 
@@ -105,14 +105,13 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
         } else if (source == bnDisconnect) {
             socketThread.close();
         } else {
-            throw new RuntimeException("Unknown source");
+            throw new RuntimeException("Unknown source" + source);
         }
     }
 
     private void sendMessage() {
         if (!tfMessage.getText().trim().isEmpty()) {
-            String msg = DTF.format(LocalDateTime.now()) + " " + tfLogin.getText() +
-                    ": " + tfMessage.getText().trim();
+            String msg = tfMessage.getText().trim();
             socketThread.sendMessage(msg);
         }
         tfMessage.setText(null);
@@ -136,6 +135,7 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
             @Override
             public void run() {
                 log.append(msg + "\n");
+                log.setCaretPosition(log.getDocument().getLength());
             }
         });
     }
@@ -175,7 +175,7 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
 
     @Override
     public void receiveString(SocketThread st, Socket socket, String str) {
-        putToLog(str);
+        handleMessage(str);
         writeToLog(str);
     }
 
@@ -185,14 +185,43 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
         writeToLog("connection lost");
         panelTop.setVisible(true);
         panelBottom.setVisible(false);
+        setTitle(TITLE);
+        final String [] EMPTY = new String[0];
+        users.setListData(EMPTY);
     }
 
     @Override
     public void socketThreadException(SocketThread st, Exception e) {
+        e.printStackTrace();
         showException(e);
     }
+
+    private void handleMessage(String msg) {
+        String arr[] = msg.split(Library.DELIMITER);
+        String msgType = arr[0];
+        switch (msgType) {
+            case Library.AUTH_ACCEPT:
+                 setTitle(TITLE + ". " + arr[1]);
+                break;
+            case Library.AUTH_DENIED:
+                break;
+            case Library.MSG_FORMAT_ERROR:
+                socketThread.close();
+                break;
+            case Library.TYPE_BROADCAST:
+                msg = DTF.format(LocalDateTime.now()) + " " + arr[1] +
+                        ": " + arr[2];
+                putToLog(msg);
+                break;
+            case Library.USER_LIST:
+                String userList = msg.substring(Library.USER_LIST.length() + Library.DELIMITER.length());
+                String[] listOfUsers = userList.split(Library.DELIMITER);
+                Arrays.sort(listOfUsers);
+                users.setListData(listOfUsers);
+                break;
+            default:
+                throw new RuntimeException("Unknown message format: " + msg);
+        }
+    }
+
 }
-
-
-
-///// закончила смотеть 7-ю лекцию на вемени 2:05

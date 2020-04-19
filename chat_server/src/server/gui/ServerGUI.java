@@ -68,7 +68,7 @@ public class ServerGUI extends JFrame implements ActionListener, Thread.Uncaught
         if (ste.length == 0) {
             msg = "Empty Stack Trace";
         } else {
-            msg = e.getClass().getCanonicalName() + ": " + e.getMessage() + "/n/t at " +
+            msg = e.getClass().getCanonicalName() + ": " + e.getMessage() + "\n\t at " +
                     ste[0];
             JOptionPane.showMessageDialog(this, msg, "EXCEPTION", JOptionPane.ERROR_MESSAGE);
             System.exit(1);

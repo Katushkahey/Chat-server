@@ -11,7 +11,7 @@ public class SocketThread extends Thread {
     private final Socket SOCKET;
     private DataOutputStream out;
 
-    public SocketThread(SocketThreadListener listener, String name, Socket socket){
+    public SocketThread(SocketThreadListener listener, String name, Socket socket) {
         super(name);
         LISTENER = listener;
         SOCKET = socket;
@@ -41,15 +41,13 @@ public class SocketThread extends Thread {
         }
     }
 
-    public synchronized boolean sendMessage(String msg) {
+    public synchronized void sendMessage(String msg) {
         try {
             out.writeUTF(msg);
             out.flush();
-            return true;
         }catch (IOException e) {
             LISTENER.socketThreadException(this, e);
             close();
-            return false;
         }
     }
 
@@ -61,4 +59,5 @@ public class SocketThread extends Thread {
             LISTENER.socketThreadException(this, e);
         }
     }
+
 }

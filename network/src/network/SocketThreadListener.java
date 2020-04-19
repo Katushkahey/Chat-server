@@ -9,4 +9,5 @@ public interface SocketThreadListener {
     void receiveString(SocketThread st, Socket socket, String str);
     void socketThreadStop(SocketThread st);
     void socketThreadException(SocketThread st, Exception e);
+
 }

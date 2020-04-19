@@ -17,6 +17,7 @@ public class Library {
     public static final String MSG_FORMAT_ERROR = "/msg_format_error";
     // сообщение, котоое будет рассылаться всем
     public static final String TYPE_BROADCAST = "/bcast";
+    public static final String USER_LIST = "/user_list";
 
     public static String getAuthRequest (String login, String password) {
         return AUTH_REQUEST + DELIMITER + login + DELIMITER + password;
@@ -35,8 +36,11 @@ public class Library {
     }
 
     public static String getTypeBroadcast(String source, String message) {
-        return TYPE_BROADCAST + DELIMITER + System.currentTimeMillis() +
-                DELIMITER + source + DELIMITER + message;
+        return TYPE_BROADCAST + DELIMITER + source + DELIMITER + message;
+    }
+
+    public static String getUserList(String userList) {
+        return USER_LIST + DELIMITER + userList;
     }
 
 }

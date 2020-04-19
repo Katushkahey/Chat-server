@@ -5,7 +5,6 @@ import network.ServerSocketThread;
 import network.ServerSocketThreadListener;
 import network.SocketThread;
 import network.SocketThreadListener;
-import network.echo.Client;
 
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -14,7 +13,7 @@ import java.util.Vector;
 public class ChatServer implements ServerSocketThreadListener, SocketThreadListener {
 
     private ServerSocketThread serverSocketThread;
-    public static Vector<SocketThread> clients = new Vector<>();
+    private static Vector<SocketThread> clients = new Vector<>();
     private final ChatServerListener LISTENER;
 
     public ChatServer(ChatServerListener listener) {
@@ -23,17 +22,17 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
 
     public void start(int port) {
         if (serverSocketThread != null && serverSocketThread.isAlive()) {
-            System.out.println("Server is already alive!");
+            putLog("Server is already running!");
         } else {
             serverSocketThread = new ServerSocketThread(this,"Chat server", port, 1000);
         }
     }
 
     public void stop() {
-        if (serverSocketThread != null && serverSocketThread.isAlive()) {
-            serverSocketThread.interrupt();
-        } else {
+        if (serverSocketThread == null && !serverSocketThread.isAlive()) {
             System.out.println("Server isn't running");
+        } else {
+            serverSocketThread.interrupt();
         }
     }
 
@@ -53,6 +52,9 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
 
     @Override
     public void serverSocketThreadStop(ServerSocketThread sst) {
+        for (int i = 0; i < clients.size() ; i++) {
+            clients.get(i).close();
+        }
         SqlClient.disconnect();
         putLog("ServerSocketThread stopped");
     }
@@ -87,6 +89,18 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
         putLog("SocketThread start");
     }
 
+    private String getUsers() {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < clients.size() ; i++) {
+            ClientThread client = (ClientThread) clients.get(i);
+            if (!client.isAuthorized()) {
+                continue;
+            }
+            sb.append(client.getNickname()).append(Library.DELIMITER);
+        }
+        return sb.toString();
+    }
+
     @Override
     public synchronized void socketThreadReady(SocketThread st, Socket socket) {
         clients.add(st);
@@ -105,14 +119,21 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
     @Override
     public synchronized void socketThreadStop(SocketThread st) {
         clients.remove(st);
+        ClientThread client = (ClientThread) st;
+        if (client.isAuthorized() && !client.isReconnected()) {
+            sendToAuthorizedClients(Library.getTypeBroadcast("Server", client.getNickname()
+                    + " disconnected"));
+            sendToAuthorizedClients(Library.getUserList(getUsers()));
+        }
     }
 
     @Override
     public synchronized void socketThreadException(SocketThread st, Exception e) {
-        putLog("SocketThread exception");
+        e.printStackTrace();
+        putLog("Eexception" + e.getClass().getName() + ": " + e.getMessage());
     }
 
-    private void sendToAuthorizedClients(String str) {
+    private synchronized void sendToAuthorizedClients(String str) {
         for (int i = 0; i < clients.size() ; i++) {
             ClientThread client = (ClientThread) clients.get(i);
             if (!client.isAuthorized()) {
@@ -122,11 +143,11 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
         }
     }
 
-    private void handleAuthorizedMessage(ClientThread ct, String str) {
-        sendToAuthorizedClients(str);
+    private synchronized void handleAuthorizedMessage(ClientThread ct, String str) {
+        sendToAuthorizedClients(Library.getTypeBroadcast(ct.getNickname(), str));
     }
 
-    private void handleNonAuthorizedMessage(ClientThread ct, String str) {
+    private synchronized void handleNonAuthorizedMessage(ClientThread ct, String str) {
         String[] arr = str.split(Library.DELIMITER);
         if (arr.length != 3 || !arr[0].equals(Library.AUTH_REQUEST)) {
             ct.msgFormatError(str);
@@ -138,9 +159,29 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
         if (nickname == null) {
             putLog("Invalid login attempt");
             ct.authFailed();
-            return;
+        } else {
+            ClientThread client = findClientByNickName(nickname);
+            ct.authAccept(nickname);
+            if (client == null) {
+                sendToAuthorizedClients(Library.getTypeBroadcast("Server", nickname + " connected!"));
+            } else {
+                client.reconnect();
+                clients.remove(client);
+            }
         }
-        ct.authAccept(nickname);
-        sendToAuthorizedClients(Library.getTypeBroadcast("Server", nickname + "connected!"));
+        sendToAuthorizedClients(Library.getUserList(getUsers()));
     }
+
+    private synchronized ClientThread findClientByNickName(String nickname) {
+        for (int i = 0; i < clients.size() ; i++) {
+            ClientThread client = (ClientThread) clients.get(i);
+            if (client.isAuthorized()) {
+                if (client.getNickname().equals(nickname)) {
+                    return client;
+                }
+            }
+        }
+        return null;
+    }
+
 }
